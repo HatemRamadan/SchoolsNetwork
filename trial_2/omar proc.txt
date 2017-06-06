@@ -1,0 +1,241 @@
+ --As an enrolled Student
+------------------------
+--1)
+--Update my account information except for the username
+create proc update_account @ssn int ,@new_password varchar(30)
+as
+begin
+update Students
+set s_password=@new_password
+where SSN=@ssn
+end
+go
+
+----------------------------------------------
+
+go
+----------------------------------------------
+
+--2)
+--View a list of courses’ names assigned to me based on my grade ordered by name
+create proc show_courses @ssn int
+as
+select c.name
+from Students_taught_Courses_by_Teachers r,Courses c
+where r.student=@ssn and r.course=c.code
+order by c.name
+
+go
+
+
+
+go
+----------------------------------------------
+
+--3)
+--Post questions I have about a certain course
+create proc post_question @ssn int ,@course varchar(10),@content varchar(500)
+as
+insert into Questions
+values (@ssn,@course,@content)
+
+go
+
+----------------------------------------------
+
+
+go
+----------------------------------------------
+
+--4)
+--View all questions asked by other students on a certain course along with their answers.
+create proc view_all_Questions @course varchar(10)
+as
+select q.content as 'question', a.content as 'answer'
+from Questions q left outer join Answers a
+on q.question_num=a.question_num and a.course=q.course and q.student=a.student 
+where q.course=@course
+
+go
+
+exec view_all_Questions 'SCIV'
+
+----------------------------------------------
+
+go
+----------------------------------------------
+--5)
+--View the assignments posted for the courses I take
+create proc view_my_assignments @ssn int ,@course varchar(10)
+as
+select a.* 
+from Students_taught_Courses_by_Teachers t,Assignments a
+where t.student=@ssn and t.course=a.course and a.course=@course
+
+go
+
+----------------------------------------------
+
+
+go
+----------------------------------------------
+--6)
+--Solve assignments posted for courses I take.
+create proc solve_assignment @ssn int ,@ass_num int ,@course varchar(10), @solution_time datetime ,@content varchar(500)
+as
+insert into Solved_assignments values(@ssn,@course,@ass_num,@solution_time,null,0,@content)
+
+go
+
+----------------------------------------------
+
+
+go
+----------------------------------------------
+
+--7)
+--View the grade of the assignments I solved per course.
+create proc view_assignments_grades @ssn int ,@course varchar(10) 
+as
+select sol.course,sol.assignment_num,sol.is_marked,sol.score
+from Solved_assignments sol
+where sol.student=@ssn and sol.course=@course 
+
+go
+
+----------------------------------------------
+
+
+go
+----------------------------------------------
+
+--8)
+--View the announcements posted within the past 10 days about the school I am enrolled in
+create proc view_mySchool_Announcements @ssn int
+as
+select a.*
+from Announcements a,Employees e,Students s
+where s.SSN=@ssn and s.school_id=e.school_id and a.administrator=e.SSN and (year(CURRENT_TIMESTAMP)*365+month(CURRENT_TIMESTAMP)*30+day(CURRENT_TIMESTAMP))-(year(a.time_date)*365+month(a.time_date)*30+day(a.time_date))<=10
+
+go
+
+----------------------------------------------
+
+
+
+go
+----------------------------------------------
+
+--9)
+--View all the information about activities offered by my school, as well as the teacher responsible for it
+create proc view_mySchool_Activities @ssn int 
+as
+select ad.a_username as 'Adminstrator',t.t_username as 'Teacher',a.timedate,a.activity_type,a.activity_location,a.equipment
+from Teachers t, Activities a,Employees e,Students s,Administrators ad
+where a.admin_ssn=e.SSN and e.school_id=s.school_id and s.SSN=@ssn and a.teacher_ssn=t.SSN and ad.SSN=e.SSN
+
+go
+
+
+----------------------------------------------
+
+go
+----------------------------------------------
+--10)
+--Apply for activities in my school on the condition that I can not join two activities of the same type on the same date
+create proc Apply_for_activity @ssn int ,@admin varchar(30), @teacher varchar(30),@time datetime ,@type varchar(20)
+as
+
+declare @t_ssn varchar(30)
+select @t_ssn=t.SSN
+from Teachers t
+where t.t_username=@teacher
+
+declare @a_ssn varchar(30)
+select @a_ssn=a.SSN
+from Administrators a
+where a.a_username=@admin
+
+
+if(
+not exists
+(select *
+ from Student_Participates_in_Activities p,Activities a 
+ where p.student=@ssn and p.adminstrator=a.admin_ssn and p.teacher=a.teacher_ssn and p.timedate=a.timedate and p.timedate=@time and a.activity_type=@type) )
+begin
+insert into Student_Participates_in_Activities
+values(@ssn,@a_ssn,@t_ssn,@time)
+end
+
+go
+
+create proc is_HighSchool_Student @ssn int, @flag int output
+as
+if(exists (select * from High_Schools h , Students s where s.SSN=@ssn and s.school_id=h.school_id))
+set @flag=1
+else
+set @flag=0
+
+
+go
+create proc get_clubs @ssn int
+as
+select c.name,c.purpose
+from Clubs c,Students s
+where s.SSN=@ssn and s.school_id=c.school_id
+----------------------------------------------
+go
+----------------------------------------------
+--11)
+--Join clubs offered by my school, if I am a highschool student
+create proc Join_club @ssn int, @club_name varchar(20)
+as
+declare @school int
+select @school=s.school_id from Students s where s.SSN=@ssn
+
+if(exists (
+select * from High_Schools h
+where h.school_id=@school
+))
+begin
+insert into Students_Joins_Clubs 
+values (@ssn,@school,@club_name) 
+end
+
+go
+
+----------------------------------------------
+
+go
+----------------------------------------------
+--12)
+--Search in a list of courses that i take by its code
+create proc search_for_courses_by_code @ssn int,@course varchar(10)
+as
+select c.* 
+from Students_taught_Courses_by_Teachers t,Courses c
+where t.course=@course and t.student=@ssn and t.course=c.code
+
+go
+
+----------------------------------------------
+
+go
+----------------------------------------------
+
+--Search in a list of courses that i take by its name
+create proc search_for_courses_by_name @ssn int,@course varchar(20)
+as
+select c.* 
+from Students_taught_Courses_by_Teachers t,Courses c
+where c.name=@course and t.student=@ssn and t.course=c.code
+
+go
+
+----------------------------------------------
+go
+
+create proc get_Student_info @username varchar(30)
+as
+select * from Students s
+where s.s_username=@username
